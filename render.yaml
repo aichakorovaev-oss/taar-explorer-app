@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: taar-explorer
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    # NODE_ENV is set only for the running server (not for the build step):
+    # setting it as a service-wide env var would make `npm ci` skip the
+    # devDependencies (esbuild, vite, typescript...) the build needs.
+    startCommand: NODE_ENV=production node dist/server.cjs
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false

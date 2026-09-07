@@ -1,0 +1,6 @@
+{
+  "name": "Taar Explorer",
+  "description": "Upload an image to discover its semiotic and explore the web through it",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
