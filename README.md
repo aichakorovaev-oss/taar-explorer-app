@@ -2,7 +2,7 @@
 
 # Taar Explorer
 
-**An interactive web app that decodes and analyzes the deeper meaning of an image, surfacing everything it evokes.**
+**An interactive web app that stimulates the web with an image, surfacing everything it evokes.**
 
 [![Live Demo](https://img.shields.io/badge/demo-taar--explorer.onrender.com-yellow)](https://taar-explorer.onrender.com)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -13,7 +13,9 @@
 
 ## Overview
 
-Taar Explorer is an image semiotics engine: drop in an image, or a whole collection, and it decodes the mood, aesthetic, color palette, typography, and cultural influences it carries, then uses that reading as a compass to explore the rest of the web. The goal isn't just to describe a picture but to explore the web differently, through an image's semiotics, its deeper meaning, by turning that reading into curated search queries, cross-media recommendations, and an ambient soundscape that matches what the image feels like.
+Taar Explorer helps to make the web exciting again: drop in an image, or a whole collection, and it decodes the mood, aesthetic, color palette, typography, and cultural influences it carries, then uses that reading as a compass to explore the rest of the web. The goal isn't just to describe a picture but to explore the web differently, through an image's semiotics, its deeper meaning, by turning that reading into curated search queries, cross-media recommendations, and an ambient soundscape that matches what the image feels like.
+
+*It can resurface forgotten movies, series, ideas or even new ones !*
 
 **[→ Try the live demo](https://taar-explorer.onrender.com)**
 
