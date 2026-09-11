@@ -1,5 +1,5 @@
 import React, { useState, useRef, ChangeEvent, DragEvent, useEffect } from 'react';
-import { UploadCloud, Image as ImageIcon, Loader2, Youtube, BookOpen, MessageSquare, ExternalLink, Sparkles, Film, Book, Palette, X, Check, Eye, EyeOff, Volume2, VolumeX, Home } from 'lucide-react';
+import { UploadCloud, Image as ImageIcon, Loader2, Youtube, BookOpen, MessageSquare, ExternalLink, Sparkles, Film, Book, Palette, X, Check, Eye, EyeOff, Volume2, VolumeX, Home, HeartHandshake, Phone, ShieldAlert, HeartCrack } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAdaptiveAudio } from '../hooks/useAdaptiveAudio';
 import {
@@ -37,12 +37,35 @@ interface AnalysisResult {
   searchCategories: SearchCategory[];
 }
 
+// Safety guardrail: when the backend's moderation pass flags an upload,
+// /api/analyze returns { safety: { flag } } instead of an AnalysisResult.
+// "minor_safety" is a hard block (highest priority — see server.ts); "self_harm"
+// and "dangerous" are genuine safety concerns; "death" is not a personal-risk
+// signal, it just means we don't turn that photo into a lighthearted "vibe".
+// The classifier prompt itself lives in the private orchestration module.
+type SafetyFlagType = 'self_harm' | 'dangerous' | 'death' | 'minor_safety';
+interface SafetyNotice {
+  flag: SafetyFlagType;
+  // Whether this notice came from analyzing several images together
+  // (analyzeCollection). Kept on the notice itself — not derived from the
+  // current images.length — because removing images down to just one left
+  // must NOT switch the wording to a confident "this image": we never
+  // re-check on removal (see reset()), so we can't be sure the remaining
+  // image is actually the one that was flagged.
+  fromCollection: boolean;
+}
+interface AnalyzeApiResponse extends Partial<AnalysisResult> {
+  safety?: SafetyNotice;
+  error?: string;
+}
+
 interface ImageItem {
   id: string;
   file: File;
   previewUrl: string;
   isAnalyzing: boolean;
   result: AnalysisResult | null;
+  safety: SafetyNotice | null;
   error: string | null;
   movies: Recommendation[] | null;
   loadingMovies: boolean;
@@ -73,6 +96,118 @@ const ACCENT = {
   mint: '#a3e4a1',
 };
 
+// Safety guardrail notice — shown instead of the playful "vibe" result
+// whenever the backend's moderation pass flags an upload. Deliberately
+// calm, non-judgmental, and free of any aesthetic/hashtag language.
+// `isCollection` adapts the wording: when several images were analyzed
+// together, the flagged content may be just ONE of them, not necessarily
+// the one currently previewed — so we say "one of these images" instead
+// of "this image".
+const SafetyNoticeCard: React.FC<{ flag: SafetyFlagType; onRemove: () => void; isCollection: boolean }> = ({ flag, onRemove, isCollection }) => {
+  if (flag === 'minor_safety') {
+    // Deliberately terse and non-descriptive: no elaboration, no "why",
+    // no empathetic framing — just a firm, neutral refusal to process.
+    return (
+      <CubistCard className="w-full !bg-white text-left p-5 flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-full shrink-0" style={{ backgroundColor: `${ACCENT.coral}40` }}>
+            <ShieldAlert className="w-5 h-5 text-[#111111]" />
+          </div>
+          <p className="font-black uppercase tracking-wide text-sm sm:text-base">This content isn't allowed here</p>
+        </div>
+        <p className="text-sm font-medium text-[#111111]/80 leading-relaxed">
+          {isCollection
+            ? "This tool can't process this set of images."
+            : "This tool can't process this image."}
+        </p>
+        <button
+          onClick={onRemove}
+          className="w-full py-2 px-6 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all bg-transparent hover:bg-[#111111]/5 text-[#111111]/60 hover:text-[#111111]"
+        >
+          {isCollection ? "Remove this image" : "Remove image"}
+        </button>
+      </CubistCard>
+    );
+  }
+
+  if (flag === 'self_harm') {
+    return (
+      <CubistCard className="w-full !bg-white text-left p-5 flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-full shrink-0" style={{ backgroundColor: `${ACCENT.pink}40` }}>
+            <HeartHandshake className="w-5 h-5 text-[#111111]" />
+          </div>
+          <p className="font-black uppercase tracking-wide text-sm sm:text-base">
+            {isCollection ? "We noticed something in one of these photos" : "We noticed something in this photo"}
+          </p>
+        </div>
+        <p className="text-sm font-medium text-[#111111]/80 leading-relaxed">
+          {isCollection
+            ? "One of the photos in this set looks like it could be about self-harm or a suicidal crisis. We haven't run an aesthetic analysis on this set — if this is about you, please know you don't have to go through it alone, and reaching out really can help."
+            : "This looks like it could be about self-harm or a suicidal crisis. We haven't run an aesthetic analysis on it — if this is about you, please know you don't have to go through it alone, and reaching out really can help."}
+        </p>
+        <div className="rounded-xl border-[3px] border-[#111111] p-3 text-sm font-bold bg-[#fef8f0]">
+          <p className="flex items-center gap-2"><Phone className="w-4 h-4 shrink-0" /> France: call or text 3114 — free, 24/7 national suicide prevention line.</p>
+          <p className="mt-1.5 text-[#111111]/70 font-medium">Outside France: findahelpline.com lists local, free helplines — or contact your local emergency number.</p>
+        </div>
+        <button
+          onClick={onRemove}
+          className="w-full py-2 px-6 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all bg-transparent hover:bg-[#111111]/5 text-[#111111]/60 hover:text-[#111111]"
+        >
+          {isCollection ? "Remove this image" : "Remove image"}
+        </button>
+      </CubistCard>
+    );
+  }
+
+  if (flag === 'dangerous') {
+    return (
+      <CubistCard className="w-full !bg-white text-left p-5 flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-full shrink-0" style={{ backgroundColor: `${ACCENT.coral}40` }}>
+            <ShieldAlert className="w-5 h-5 text-[#111111]" />
+          </div>
+          <p className="font-black uppercase tracking-wide text-sm sm:text-base">Can't analyze this one</p>
+        </div>
+        <p className="text-sm font-medium text-[#111111]/80 leading-relaxed">
+          {isCollection
+            ? "One of the images in this set appears to show real weapons, violence, or otherwise dangerous content, so we're not running this set through the aesthetic decoder."
+            : "This image appears to show real weapons, violence, or otherwise dangerous content, so we're not running it through the aesthetic decoder."}
+        </p>
+        <button
+          onClick={onRemove}
+          className="w-full py-2 px-6 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all bg-transparent hover:bg-[#111111]/5 text-[#111111]/60 hover:text-[#111111]"
+        >
+          {isCollection ? "Remove this image" : "Remove image"}
+        </button>
+      </CubistCard>
+    );
+  }
+
+  // flag === 'death'
+  return (
+    <CubistCard className="w-full !bg-white text-left p-5 flex flex-col gap-3">
+      <div className="flex items-center gap-3">
+        <div className="p-2 rounded-full shrink-0" style={{ backgroundColor: `${ACCENT.blue}40` }}>
+          <HeartCrack className="w-5 h-5 text-[#111111]" />
+        </div>
+        <p className="font-black uppercase tracking-wide text-sm sm:text-base">No vibe check for this one</p>
+      </div>
+      <p className="text-sm font-medium text-[#111111]/80 leading-relaxed">
+        {isCollection
+          ? "One of the images in this set appears to show a real deceased person. Out of respect, we don't turn photos like this into a lighthearted aesthetic breakdown or recommendations."
+          : "This image appears to show a real deceased person. Out of respect, we don't turn photos like this into a lighthearted aesthetic breakdown or recommendations."}
+      </p>
+      <button
+        onClick={onRemove}
+        className="w-full py-2 px-6 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all bg-transparent hover:bg-[#111111]/5 text-[#111111]/60 hover:text-[#111111]"
+      >
+        {isCollection ? "Remove this image" : "Remove image"}
+      </button>
+    </CubistCard>
+  );
+};
+
 export default function AestheticExplorer() {
   const [images, setImages] = useState<ImageItem[]>([]);
   const [activeIndex, setActiveIndex] = useState<number>(0);
@@ -91,6 +226,7 @@ export default function AestheticExplorer() {
   const previewUrl = activeImage?.previewUrl || null;
   const isAnalyzing = activeImage?.isAnalyzing || false;
   const result = activeImage?.result || null;
+  const safety = activeImage?.safety || null;
 
   const { isPlaying, togglePlay } = useAdaptiveAudio(result);
 
@@ -200,6 +336,7 @@ export default function AestheticExplorer() {
         previewUrl: url,
         isAnalyzing: false,
         result: null,
+        safety: null,
         error: null,
         movies: null,
         loadingMovies: false,
@@ -283,6 +420,7 @@ export default function AestheticExplorer() {
     updateActiveImage({
       isAnalyzing: true,
       result: null,
+      safety: null,
       movies: null,
       novels: null,
       artists: null,
@@ -314,8 +452,14 @@ export default function AestheticExplorer() {
         throw new Error(errMessage);
       }
 
-      const data: AnalysisResult = await response.json();
-      updateActiveImage({ result: data });
+      const data: AnalyzeApiResponse = await response.json();
+      if (data.safety) {
+        // Safety guardrail tripped: show a supportive/safety notice instead
+        // of the playful aesthetic result.
+        updateActiveImage({ safety: { flag: data.safety.flag, fromCollection: false }, result: null });
+      } else {
+        updateActiveImage({ result: data as AnalysisResult, safety: null });
+      }
     } catch (err: any) {
       console.error(err);
       updateActiveImage({ error: err.message || 'An unexpected error occurred during analysis.' });
@@ -333,6 +477,7 @@ export default function AestheticExplorer() {
       ...img,
       isAnalyzing: true,
       result: null,
+      safety: null,
       movies: null,
       novels: null,
       artists: null,
@@ -356,12 +501,26 @@ export default function AestheticExplorer() {
         throw new Error(errMessage);
       }
 
-      const data: AnalysisResult = await response.json();
-      // Apply the same result to all images
-      setImages(prev => prev.map(img => ({
-        ...img,
-        result: data,
-      })));
+      const data: AnalyzeApiResponse = await response.json();
+      if (data.safety) {
+        // Safety guardrail tripped for the collection: show the notice on
+        // every image instead of the playful aesthetic result. fromCollection
+        // is what lets the wording stay hedged even if the set later shrinks
+        // down to a single image (see reset() and SafetyNotice above).
+        const safetyNotice: SafetyNotice = { flag: data.safety.flag, fromCollection: true };
+        setImages(prev => prev.map(img => ({
+          ...img,
+          safety: safetyNotice,
+          result: null,
+        })));
+      } else {
+        // Apply the same result to all images
+        setImages(prev => prev.map(img => ({
+          ...img,
+          result: data as AnalysisResult,
+          safety: null,
+        })));
+      }
     } catch (err: any) {
       console.error(err);
       setImages(prev => prev.map(img => ({
@@ -503,6 +662,13 @@ export default function AestheticExplorer() {
   };
 
   const reset = () => {
+    // Deliberately conservative, and cheap: we don't know which image in a
+    // shared batch (see analyzeCollection) actually caused a safety flag,
+    // so removing one image never clears or re-checks the others — a
+    // lingering "self_harm"/"dangerous"/"death"/"minor_safety" notice stays
+    // exactly as it is on any image that still carries it. No extra API
+    // calls; the notice only goes away once every image in the set has
+    // been removed (or the person clears everything with "Back to Home").
     setImages(prev => prev.filter((_, idx) => idx !== activeIndex));
     if (images.length === 1) { // If it was the last image
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -675,6 +841,8 @@ export default function AestheticExplorer() {
 
                       {isAnalyzing ? (
                         <DecodingPill label="Decoding..." />
+                      ) : safety ? (
+                        <SafetyNoticeCard flag={safety.flag} onRemove={reset} isCollection={safety.fromCollection} />
                       ) : (
                         <div className="w-full flex flex-col gap-3">
                           <CubistButton onClick={analyzeImage} color={ACCENT.yellow} className="w-full">
