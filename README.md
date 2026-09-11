@@ -29,6 +29,25 @@ Taar Explorer is an image semiotics engine: drop in an image, or a whole collect
 - **Seamless multi-image collection management** : upload and switch between several images in one session, each keeping its own analysis, recommendations, and annotations.
 - **Cubist / art-deco interface** : animated letter tiles, thick borders, hard drop shadows, and a mouse-following eye, ported from an earlier "Cubist Notes" prototype.
 
+## Content safety
+
+Before the image semiotic is decoded, a dedicated moderation pass classifies it into one of a handful of categories. If anything sensitive is detected, the app skips the analysis entirely and shows a plain-language notice instead.
+
+| Category | What it catches | What the app does |
+|---|---|---|
+| Sexual/intimate content involving an apparent minor | Highest priority, always wins over every other category | Hard block : a neutral, non-descriptive refusal, no further processing |
+| Self-harm / suicide risk | Content suggesting a real, personal crisis | A supportive notice with crisis-line resources, no semiotic check |
+| Dangerous content | Real weapons, violence, gore, extremist content | Blocked with a neutral notice |
+| Real depictions of death | A real deceased person or graphic aftermath | Blocked, out of respect, no lighthearted breakdown |
+
+Costumes, movie/game stills, historical or documentary photography, dark fashion/art, and ordinary photos of minors are deliberately **not** flagged — the classifier is tuned to catch content that's genuinely, literally about one of the categories above, not anything merely dark or thematically adjacent.
+
+The classifier prompt itself is part of the private orchestration module (see the note below), consistent with the rest of the AI logic. Two things worth knowing if you're evaluating or building on this:
+
+- **This is a best-effort AI classifier, not a certified detection system.** In particular, it is *not* a substitute for hash-matching CSAM detection (e.g. Thorn Safer, Google CSAI Match, Microsoft PhotoDNA) and does not fulfill any legal reporting obligation on its own (e.g. US providers must report apparent CSAM to NCMEC's CyberTipline under 18 U.S.C. §2258A). Anyone taking this to production with real public uploads should bring in a dedicated provider and legal counsel first.
+- **It fails open.** If the classifier call itself errors out (network hiccup, malformed response), the image is treated as safe rather than blocking the app, a deliberate reliability trade-off that's worth reconsidering (fail-closed) for a public deployment.
+
+
 ## Tech stack
 
 | Layer | Technology |
