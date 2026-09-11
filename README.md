@@ -15,7 +15,7 @@
 
 Taar Explorer helps to make the web exciting again: drop in an image, or a whole collection, and it decodes the mood, aesthetic, color palette, typography, and cultural influences it carries, then uses that reading as a compass to explore the rest of the web. The goal isn't just to describe a picture but to explore the web differently, through an image's semiotics, its deeper meaning, by turning that reading into curated search queries, cross-media recommendations, and an ambient soundscape that matches what the image feels like.
 
-*It can resurface forgotten movies, series, ideas or even new ones !*
+*It can resurface forgotten movies, series, ideas and even ones you never thought about !*
 
 **[→ Try the live demo](https://taar-explorer.onrender.com)**
 
