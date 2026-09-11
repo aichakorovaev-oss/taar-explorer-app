@@ -36,7 +36,19 @@ async function startServer() {
 
   // POST /api/analyze
   // Body: { image?: string, images?: string[] }  (base64 data URLs)
-  // Returns: { mood, aesthetic, styleDetails, twist, colors, fonts, continents, searchCategories }
+  // Returns one of:
+  //   - { safety: { flag: "minor_safety" | "self_harm" | "dangerous" | "death" } }
+  //     if the built-in content-safety classifier flags the upload — no
+  //     aesthetic analysis is run in that case, and no other fields are
+  //     returned. Checked in priority order minor_safety > self_harm >
+  //     dangerous > death; "minor_safety" is a hard block, the others route
+  //     to a supportive/neutral notice on the frontend instead of a result.
+  //   - { mood, aesthetic, styleDetails, twist, colors, fonts, continents,
+  //     searchCategories } otherwise.
+  // The classifier prompt itself lives in the private orchestration module,
+  // like the rest of the AI logic — see the README note on what's not in
+  // this repo. It's a best-effort AI pass, not a certified detection system,
+  // and doesn't fulfill any legal reporting obligation on its own.
   app.post("/api/analyze", async (req, res) => {
     try {
       const { image, images } = req.body;
