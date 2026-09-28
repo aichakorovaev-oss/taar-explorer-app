@@ -1,5 +1,5 @@
 import React, { useState, useRef, ChangeEvent, DragEvent, useEffect } from 'react';
-import { UploadCloud, Image as ImageIcon, Loader2, Youtube, BookOpen, MessageSquare, ExternalLink, Sparkles, Film, Book, Palette, X, Check, Eye, EyeOff, Volume2, VolumeX, Home, HeartHandshake, Phone, ShieldAlert, HeartCrack } from 'lucide-react';
+import { UploadCloud, Image as ImageIcon, Loader2, Youtube, BookOpen, MessageSquare, ExternalLink, Sparkles, Film, Book, Palette, X, Check, Eye, EyeOff, Volume2, VolumeX, Home, HeartHandshake, Phone, ShieldAlert, HeartCrack, Flag } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAdaptiveAudio } from '../hooks/useAdaptiveAudio';
 import {
@@ -15,6 +15,7 @@ import {
   getContrastColor,
   DEFAULT_PALETTE,
 } from './cubist/CubistUI';
+import { ReportModal, FeedbackModal, RecommendationCategory, ReportPayload } from './FeedbackSystem';
 
 interface SearchCategory {
   categoryName: string;
@@ -39,10 +40,9 @@ interface AnalysisResult {
 
 // Safety guardrail: when the backend's moderation pass flags an upload,
 // /api/analyze returns { safety: { flag } } instead of an AnalysisResult.
-// "minor_safety" is a hard block (highest priority — see server.ts); "self_harm"
+// "minor_safety" is a hard block (highest priority, see server.ts); "self_harm"
 // and "dangerous" are genuine safety concerns; "death" is not a personal-risk
 // signal, it just means we don't turn that photo into a lighthearted "vibe".
-// The classifier prompt itself lives in the private orchestration module.
 type SafetyFlagType = 'self_harm' | 'dangerous' | 'death' | 'minor_safety';
 interface SafetyNotice {
   flag: SafetyFlagType;
@@ -191,12 +191,12 @@ const SafetyNoticeCard: React.FC<{ flag: SafetyFlagType; onRemove: () => void; i
         <div className="p-2 rounded-full shrink-0" style={{ backgroundColor: `${ACCENT.blue}40` }}>
           <HeartCrack className="w-5 h-5 text-[#111111]" />
         </div>
-        <p className="font-black uppercase tracking-wide text-sm sm:text-base">No vibe check for this one</p>
+        <p className="font-black uppercase tracking-wide text-sm sm:text-base">No semiotic check for this one</p>
       </div>
       <p className="text-sm font-medium text-[#111111]/80 leading-relaxed">
         {isCollection
-          ? "One of the images in this set appears to show a real deceased person. Out of respect, we don't turn photos like this into a lighthearted aesthetic breakdown or recommendations."
-          : "This image appears to show a real deceased person. Out of respect, we don't turn photos like this into a lighthearted aesthetic breakdown or recommendations."}
+          ? "One of the images in this set appears to show a real deceased person. Out of respect, we don't turn photos like this into a lighthearted breakdown or recommendations."
+          : "This image appears to show a real deceased person. Out of respect, we don't turn photos like this into a lighthearted breakdown or recommendations."}
       </p>
       <button
         onClick={onRemove}
@@ -229,6 +229,65 @@ export default function AestheticExplorer() {
   const safety = activeImage?.safety || null;
 
   const { isPlaying, togglePlay } = useAdaptiveAudio(result);
+
+  // ── Feedback & reporting ──────────────────────────────────────────────
+  // A stable per-tab id sent alongside every report/feedback submission
+  // (lets the backend de-dupe/correlate without needing accounts).
+  const [sessionId] = useState<string>(() =>
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2)
+  );
+  const [reportPayload, setReportPayload] = useState<ReportPayload | null>(null);
+  const [reportPending, setReportPending] = useState<{ category: RecommendationCategory; idx: number } | null>(null);
+  const [reportedKeys, setReportedKeys] = useState<Record<RecommendationCategory, Set<number>>>({
+    movies: new Set(), novels: new Set(), artists: new Set(),
+  });
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const openReport = (category: RecommendationCategory, item: Recommendation, idx: number) => {
+    setReportPending({ category, idx });
+    setReportPayload({
+      category,
+      itemTitle: item.title,
+      itemAuthor: item.authorOrDirector,
+      itemReason: item.reason,
+      aesthetic: result?.aesthetic ?? null,
+      moods: result?.mood ?? [],
+      nonce: sessionId,
+    });
+  };
+
+  const handleReportSubmitted = () => {
+    if (!reportPending) return;
+    const { category, idx } = reportPending;
+    setReportedKeys((prev) => {
+      const next = new Set(prev[category]);
+      next.add(idx);
+      return { ...prev, [category]: next };
+    });
+  };
+
+  const markFeedbackGiven = () => {
+    try { sessionStorage.setItem('taar_feedback_given', '1'); } catch (e) {}
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+  };
+
+  // Proactively offer the feedback modal once, a couple of minutes after
+  // someone gets their first result — but never if they already gave
+  // feedback or were already prompted this session.
+  useEffect(() => {
+    if (!result) return;
+    try {
+      if (sessionStorage.getItem('taar_feedback_given') || sessionStorage.getItem('taar_feedback_prompted')) return;
+    } catch (e) {}
+    feedbackTimerRef.current = setTimeout(() => {
+      try { sessionStorage.setItem('taar_feedback_prompted', '1'); } catch (e) {}
+      setFeedbackOpen(true);
+    }, 120_000);
+    return () => { if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!result]);
+  // -----------------------------------------------------------------------
 
   const error = activeImage?.error || null;
   const movies = activeImage?.movies || null;
@@ -665,11 +724,12 @@ export default function AestheticExplorer() {
     // Deliberately conservative, and cheap: we don't know which image in a
     // shared batch (see analyzeCollection) actually caused a safety flag,
     // so removing one image never clears or re-checks the others — a
-    // lingering "self_harm"/"dangerous"/"death"/"minor_safety" notice stays
-    // exactly as it is on any image that still carries it. No extra API
-    // calls; the notice only goes away once every image in the set has
-    // been removed (or the person clears everything with "Back to Home").
+    // lingering "self_harm"/"dangerous"/"death" notice stays exactly as
+    // it is on any image that still carries it. No extra API calls; the
+    // notice only goes away once every image in the set has been removed
+    // (or the person clears everything with "Back to Home").
     setImages(prev => prev.filter((_, idx) => idx !== activeIndex));
+
     if (images.length === 1) { // If it was the last image
       if (fileInputRef.current) fileInputRef.current.value = '';
       setActiveIndex(0);
@@ -725,6 +785,17 @@ export default function AestheticExplorer() {
           activeColor={ACCENT.yellow}
         >
           {isPlaying ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+        </CubistIconButton>
+      </div>
+
+      {/* Global Feedback Trigger */}
+      <div className="absolute top-4 left-4 sm:top-6 sm:left-6 lg:top-10 lg:left-10 z-[60]">
+        <CubistIconButton
+          onClick={(e) => { e.stopPropagation(); setFeedbackOpen(true); }}
+          title="Give feedback on Taar Explorer"
+          aria-label="Give feedback on Taar Explorer"
+        >
+          <MessageSquare className="w-5 h-5" />
         </CubistIconButton>
       </div>
 
@@ -846,8 +917,8 @@ export default function AestheticExplorer() {
                       ) : (
                         <div className="w-full flex flex-col gap-3">
                           <CubistButton onClick={analyzeImage} color={ACCENT.yellow} className="w-full">
-                            <ImageIcon className="w-5 h-5" />
-                            Discover Vibe
+                            
+                            Discover its semiotic
                           </CubistButton>
                           {images.length > 1 && (
                             <CubistButton
@@ -863,8 +934,8 @@ export default function AestheticExplorer() {
                                 </>
                               ) : (
                                 <>
-                                  <Sparkles className="w-5 h-5" />
-                                  Discover Vibe for All {images.length} Images
+                
+                                  Discover semiotic for All {images.length} Images
                                 </>
                               )}
                             </CubistButton>
@@ -1248,6 +1319,9 @@ export default function AestheticExplorer() {
                       subtitlePrefix=""
                       moreLabel="+ More Artists"
                       hideTitle
+                      category="artists"
+                      reportedKeys={reportedKeys.artists}
+                      onReport={(item, idx) => openReport('artists', item, idx)}
                     />
                   </CubistCard>
 
@@ -1278,6 +1352,9 @@ export default function AestheticExplorer() {
                       moreLabel="+ More Movies"
                       posterAspect
                       hideTitle
+                      category="movies"
+                      reportedKeys={reportedKeys.movies}
+                      onReport={(item, idx) => openReport('movies', item, idx)}
                     />
                   </CubistCard>
 
@@ -1308,6 +1385,9 @@ export default function AestheticExplorer() {
                       moreLabel="+ More Novels"
                       posterAspect
                       hideTitle
+                      category="novels"
+                      reportedKeys={reportedKeys.novels}
+                      onReport={(item, idx) => openReport('novels', item, idx)}
                     />
                   </CubistCard>
                 </div>
@@ -1437,6 +1517,29 @@ export default function AestheticExplorer() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Report / Feedback modals */}
+        <AnimatePresence>
+          {reportPayload && (
+            <ReportModal
+              payload={reportPayload}
+              onClose={() => setReportPayload(null)}
+              onSubmitted={handleReportSubmitted}
+            />
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
+          {feedbackOpen && (
+            <FeedbackModal
+              open={feedbackOpen}
+              onClose={() => setFeedbackOpen(false)}
+              onSubmitted={markFeedbackGiven}
+              lastAesthetic={result?.aesthetic}
+              lastMoods={result?.mood}
+              sessionId={sessionId}
+            />
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
@@ -1457,6 +1560,9 @@ function RecommendationSection<T extends Recommendation>({
   moreLabel,
   posterAspect,
   hideTitle,
+  category,
+  reportedKeys,
+  onReport,
 }: {
   title: string;
   emptyLabel: string;
@@ -1471,6 +1577,9 @@ function RecommendationSection<T extends Recommendation>({
   moreLabel: string;
   posterAspect?: boolean;
   hideTitle?: boolean;
+  category: RecommendationCategory;
+  reportedKeys: Set<number>;
+  onReport: (item: T, idx: number) => void;
 }) {
   if (!items) {
     return (
@@ -1501,7 +1610,23 @@ function RecommendationSection<T extends Recommendation>({
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <h5 className="font-black text-sm">{item.title}</h5>
+            <div className="flex items-start justify-between gap-2">
+              <h5 className="font-black text-sm">{item.title}</h5>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); if (!reportedKeys.has(idx)) onReport(item, idx); }}
+                disabled={reportedKeys.has(idx)}
+                title={reportedKeys.has(idx) ? "Reported" : "Report this recommendation"}
+                aria-label={reportedKeys.has(idx) ? "Reported" : "Report this recommendation"}
+                className={`shrink-0 flex items-center gap-1 -mt-0.5 px-1.5 py-1 rounded-full transition-colors ${
+                  reportedKeys.has(idx)
+                    ? 'text-[#f98b79] cursor-default'
+                    : 'text-[#111111]/25 hover:text-[#111111]/70 cursor-pointer'
+                }`}
+              >
+                <Flag className="w-3.5 h-3.5" fill={reportedKeys.has(idx) ? 'currentColor' : 'none'} />
+              </button>
+            </div>
             <p className="text-xs text-[#111111]/50 mb-2 font-bold">{subtitlePrefix}{item.authorOrDirector}</p>
             <p className="text-xs text-[#111111]/80 leading-relaxed mb-2 font-medium">{item.reason}</p>
             {renderLink(item)}
