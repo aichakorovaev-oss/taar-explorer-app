@@ -1,109 +1,96 @@
-<div align="center">
+# Taar Explorer 
 
-# Taar Explorer
+Upload an image (or a whole collection) to decode its mood, aesthetic, color palette,
+and typography — then dive into curated YouTube, Wikipedia, and Reddit searches, AI-picked
+movies/novels/artists, precise visual annotations, and an aesthetic mismatch detector for
+multi-image collections. Visual style: cubist / art-deco, ported from the "Cubist Notes"
+prototype (animated letter tiles, thick borders, hard drop shadows, a mouse-following eye).
 
-**An interactive web app that stimulates the web with an image, surfacing everything it evokes.**
+## Run locally
 
-[![Live Demo](https://img.shields.io/badge/demo-taar--explorer.onrender.com-yellow)](https://taar-explorer.onrender.com)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-
-<img src="assets/screenshot.png" alt="Taar Explorer — landing screen" width="720">
-
-</div>
-
-## Overview
-
-Taar Explorer helps to make the web exciting again: drop in an image, or a whole collection, and it decodes the mood, aesthetic, color palette, typography, and cultural influences it carries, then uses that reading as a compass to explore the rest of the web. The goal isn't just to describe a picture but to explore the web differently, through an image's semiotics, its deeper meaning, by turning that reading into curated search queries, cross-media recommendations, and an ambient soundscape that matches what the image feels like.
-
-*It can resurface forgotten movies, series, ideas and even ones you never thought about !*
-
-**[→ Try the live demo](https://taar-explorer.onrender.com)**
-
-## Features
-
-- **Multimodal AI analysis** : Gemini reads the image (or collection) to decode its moods, artistic style, color palette, typography, and which world continent(s) culturally influence it, down to details like motifs, jewelry, clothing cuts, and fabrics, plus a "twist" detector that calls out any uncanny or subverted element in the frame.
-- **Cross-recommendations** : the same aesthetic reading drives AI-picked movies/TV, novels, and artists that share its mood and visual language, not just its literal subject matter, with more suggestions generatable on demand.
-- **Enrichment via the Wikipedia API** : every recommendation is cross-referenced against Wikipedia to attach a real illustrative image, so a suggested film, book, or artist comes with a face rather than a blank card.
-- **Curated web exploration** : the analysis is translated into diverse, mood-driven search queries across YouTube, Wikipedia, and Reddit, organized into categories, with an on-demand preview of what each search is likely to surface.
-- **Aesthetic mismatch detector** : for multi-image collections, a dedicated pass flags any image that breaks the group's visual cohesion and explains why in plain language.
-- **Guided visual annotation** : an AI "guide" points out and comments on the 3 to 5 specific visual elements that build the image's aesthetic, plotted directly on the canvas.
-- **Adaptive ambient audio** : a generative soundscape (Web Audio API,  oscillators, an LFO-driven filter) is tuned live to the decoded mood and aesthetic, so the exploration has a matching sound, not just a look. It is not on point yet, still work in progress.
-- **Seamless multi-image collection management** : upload and switch between several images in one session, each keeping its own analysis, recommendations, and annotations.
-- **Cubist / art-deco interface** : animated letter tiles, thick borders, hard drop shadows, and a mouse-following eye, ported from an earlier "Cubist Notes" prototype.
-
-## Content safety
-
-Before the image semiotic is decoded, a dedicated moderation pass classifies it into one of a handful of categories. If anything sensitive is detected, the app skips the analysis entirely and shows a plain-language notice instead.
-
-| Category | What it catches | What the app does |
-|---|---|---|
-| Sexual/intimate content involving an apparent minor | Highest priority, always wins over every other category | Hard block : a neutral, non-descriptive refusal, no further processing |
-| Self-harm / suicide risk | Content suggesting a real, personal crisis | A supportive notice with crisis-line resources, no semiotic check |
-| Dangerous content | Real weapons, violence, gore, extremist content | Blocked with a neutral notice |
-| Real depictions of death | A real deceased person or graphic aftermath | Blocked, out of respect, no lighthearted breakdown |
-
-Costumes, movie/game stills, historical or documentary photography, dark fashion/art, and ordinary photos of minors are deliberately **not** flagged — the classifier is tuned to catch content that's genuinely, literally about one of the categories above, not anything merely dark or thematically adjacent.
-
-The classifier prompt itself is part of the private orchestration module (see the note below), consistent with the rest of the AI logic. Two things worth knowing if you're evaluating or building on this:
-
-- **This is a best-effort AI classifier, not a certified detection system.** In particular, it is *not* a substitute for hash-matching CSAM detection (e.g. Thorn Safer, Google CSAI Match, Microsoft PhotoDNA) and does not fulfill any legal reporting obligation on its own (e.g. US providers must report apparent CSAM to NCMEC's CyberTipline under 18 U.S.C. §2258A). Anyone taking this to production with real public uploads should bring in a dedicated provider and legal counsel first.
-- **It fails open.** If the classifier call itself errors out (network hiccup, malformed response), the image is treated as safe rather than blocking the app, a deliberate reliability trade-off that's worth reconsidering (fail-closed) for a public deployment.
-
-
-## Tech stack
-
-| Layer | Technology |
-|---|---|
-| Frontend | React 19 + Vite, Tailwind CSS v4, Motion (Framer Motion), Lucide icons |
-| AI analysis & writing | [Google GenAI API](https://ai.google.dev/) (Gemini) |
-| Enrichment | [Wikipedia API](https://www.mediawiki.org/wiki/API:Main_page) |
-| Ambient sound | Web Audio API (hand-rolled synth, no audio files) |
-| Backend | [Express](https://expressjs.com/) (Node), served alongside Vite in dev and as a static host in production |
-| Deployment | [Render](https://render.com/) (see `render.yaml`), Docker-compatible |
-
-## Project structure
-
-```
-taar-explorer/
-├── index.html          # Vite entry point
-├── server.ts           # Express route layer (see note below)
-├── src/
-│   ├── App.tsx
-│   ├── components/
-│   │   ├── AestheticExplorer.tsx   # main app: upload, analysis view, recommendations
-│   │   └── cubist/CubistUI.tsx     # cubist/art-deco UI chrome
-│   ├── hooks/useAdaptiveAudio.ts   # mood-reactive Web Audio synth
-│   ├── assets/images/              # UI background art
-│   └── index.css
-├── Dockerfile
-├── render.yaml
-└── assets/
-    └── screenshot.png
-```
-
-### A note on what's not in this repo
-
-This is a public snapshot of the project's frontend and route layer, kept for portfolio and code-review purposes. The actual AI orchestration; the Gemini prompt engineering behind each analysis, the response schemas, the aesthetic-mismatch and recommendation logic, and the Wikipedia enrichment pipeline; lives in a private module (`./ai/orchestration`) that isn't included here. `server.ts` still shows the real API surface (every endpoint, its inputs and outputs), just not the prompts and logic behind it, since that's the part of the project I've iterated on the most and I'm keeping it closed for now.
-
-If you'd like to know more, discuss the implementation, or need access for a specific purpose, reach out: **aichakorovaev@gmail.com**.
-
-## Running it locally
-
-The frontend runs on its own for UI work, but full functionality (image analysis, recommendations, search enrichment) needs the private orchestration module described above.
+**Prerequisites:** Node.js 20+
 
 ```bash
-git clone https://github.com/<your-username>/taar-explorer.git
-cd taar-explorer
 npm install
+# GEMINI_API_KEY needs a valid Gemini API key (https://aistudio.google.com/apikey)
+echo "GEMINI_API_KEY=your-key-here" > .env.local
 npm run dev
 ```
 
-The app runs at `http://localhost:3000`. Without the private `./ai/orchestration` module, `npm run dev` will start but the `/api/*` routes will fail to build/run — see the note above if you need working endpoints.
+The app runs at http://localhost:3000.
 
-### Deploying
+## Deploy to Render (free tier)
 
-This repo ships with a `render.yaml` Blueprint for [Render](https://render.com) and a `Dockerfile` for any Docker host, both wired for a Node/Express deployment. Either will need the private orchestration module in place to actually serve working API responses.
+This repo ships with a `render.yaml` Blueprint, so Render can set everything up
+automatically:
 
-## License
+1. Push this repo to GitHub (or GitLab).
+2. On [render.com](https://render.com), click **New → Blueprint** and connect the repo.
+   Render reads `render.yaml` and proposes a free "web" service — no credit card needed.
+3. When prompted for `GEMINI_API_KEY`, paste your Gemini API key
+   ([get one here](https://aistudio.google.com/apikey)). It's stored as a Render **secret**
+   (`sync: false` in the Blueprint), never committed to the repo.
+4. Click **Deploy Blueprint**. Render runs `npm ci && npm run build`, then starts the app
+   with `node dist/server.cjs`. You'll get a `https://aesthetic-explorer.onrender.com`-style
+   URL once the build finishes (a couple of minutes).
 
-The source code shown here is MIT-licensed — see [LICENSE](LICENSE). This license covers the code in this repository only; it does not extend to the private orchestration module described above.
+**About the free tier:** the service spins down after ~15 minutes without traffic and takes
+30–60s to wake back up on the next request (cold start) — normal on Render's free plan, no
+action needed. If you'd rather avoid that, Render's paid "Starter" plan ($7/mo) keeps it
+always-on.
+
+You can also skip the Blueprint and create the Web Service by hand in the Render dashboard;
+just set the build command to `npm ci && npm run build`, the start command to
+`NODE_ENV=production node dist/server.cjs`, and add `GEMINI_API_KEY` under Environment.
+
+### Note on Hugging Face Spaces
+
+This repo also includes a `Dockerfile` (listens on port 7860) in case you want to deploy it
+as a Hugging Face **Docker Space** later — as of mid-2026, HF moved Docker/Gradio Spaces on
+the free CPU-basic tier behind a PRO subscription, so it's no longer a free option. The
+`Dockerfile` still works as-is (e.g. on Render's Docker runtime, or any other Docker host)
+if that ever changes or you decide to subscribe.
+
+## Feedback & reporting
+
+Two lightweight, no-login feedback channels, ported from the "Ami" app:
+
+- **Report a recommendation** — a small flag icon on every artist/movie/novel card lets
+  someone mark a pick as offensive, mismatched, or "other", with an optional note.
+  `POST /api/report`.
+- **General feedback** — a feedback button in the top-left corner (and a one-time
+  automatic prompt ~2 minutes after someone's first result) opens a short form: star
+  rating, whether the analysis felt accurate, whether the picks were relevant, and a
+  would-you-recommend question. `POST /api/feedback`.
+
+Both are appended as JSONL to `feedback_data/reports.jsonl` and
+`feedback_data/app_feedback.jsonl` on the server's local disk.
+
+### Making feedback durable
+
+Local disk is **ephemeral** on Render's free tier and on a Hugging Face Docker Space —
+it's wiped on every restart/redeploy. So, exactly like Ami does on the Python side with
+`huggingface_hub`'s `CommitScheduler`, this server also pushes those two JSONL files to a
+private Hugging Face **Dataset** repo — on a 5-minute timer, shortly (30s, debounced)
+after any new entry comes in, and once more on a graceful shutdown/redeploy. A sync
+failure (bad token, no network) is logged and retried next cycle; it never affects the
+person submitting feedback.
+
+To turn this on:
+
+1. Create a private dataset repo on the Hub, e.g. `yourusername/taar-explorer-feedback`.
+2. Create an [access token](https://huggingface.co/settings/tokens) with **write** access
+   to that repo.
+3. Set two env vars / secrets on your host:
+   - `FEEDBACK_DATASET_REPO = "yourusername/taar-explorer-feedback"`
+   - `HF_TOKEN = <that token>`
+
+Without them, the server logs a one-time warning at startup and feedback still works —
+it's just only on local (ephemeral) disk, so it **will be lost** on the next
+restart/redeploy. (Render's paid "Starter" plan's persistent disk is the other option, if
+you'd rather not use a Hub dataset.)
+
+## Tech
+
+React 19 + Vite + Express (single Node server serving both the API and the built client),
+Tailwind CSS v4, Framer Motion, and the Gemini API (`@google/genai`) for image analysis.

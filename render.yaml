@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: taar-explorer
+    name: aesthetic-explorer
     runtime: node
     plan: free
     buildCommand: npm ci && npm run build
@@ -10,4 +10,13 @@ services:
     startCommand: NODE_ENV=production node dist/server.cjs
     envVars:
       - key: GEMINI_API_KEY
+        sync: false
+      # Optional — only needed to make /api/report and /api/feedback survive
+      # redeploys by syncing feedback_data/ to a private HF Dataset repo.
+      # Leave blank (or remove) to skip: feedback still works, it just stays
+      # on this service's ephemeral disk. See README's "Feedback & reporting"
+      # section.
+      - key: FEEDBACK_DATASET_REPO
+        sync: false
+      - key: HF_TOKEN
         sync: false
