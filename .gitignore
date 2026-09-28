@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+.env.local
+
+# Feedback & reports collected by /api/feedback and /api/report (see server.ts).
+# Local disk only — never commit user feedback.
+feedback_data/
